@@ -10,8 +10,9 @@ const char* fiwareHost = "84.89.60.4";
 const char* eId = "daniTest2";
 const char* eType = "sensor";
 const char* eDescription = "My description here ...";
-const char* eVar1Type = "Float";
-float eVar1Value = 2.25;
+const char* eVar1Type = "Int";
+int eVar1Value = 0;
+int eVar1ValueTMP = 0;
 
 
 
@@ -21,11 +22,25 @@ void setup() {
   connectWiFi();
   checkFiware();
   registerEntity();
+  randomSeed(analogRead(0));
   delay(100);
 }
 
 void loop() {
-  delay(5000);
+  eVar1ValueTMP = random(2);
+  if (eVar1ValueTMP != eVar1Value) {
+    eVar1Value = eVar1ValueTMP;
+    Serial.println("Change detected");
+    postNewData();
+  }
+  delay(1000);
+}
+
+/* ======================================================= */
+
+void postNewData() {
+  String url = "http://" + String(fiwareHost) + "/v2/entities/" + String(eId) + "/attrs";
+  patchJson(url, SensorData());
 }
 
 /* ======================================================= */
@@ -103,8 +118,9 @@ JsonObject& fetchJson(String url){
 /* ======================================================= */
 
 void postJson(String url, JsonObject& data){
-  Serial.println("Posting JSON data to:");
-  Serial.println(url);
+  Serial.print("Posting JSON data to: ");
+  Serial.print(String(url));
+  Serial.print(String(url));
 
   char JSONmessageBuffer[512];
   data.prettyPrintTo(JSONmessageBuffer, sizeof(JSONmessageBuffer));
@@ -114,6 +130,28 @@ void postJson(String url, JsonObject& data){
   http.begin(url);
   http.addHeader("Content-Type", "application/json");
   int httpCode = http.POST(JSONmessageBuffer);
+  String payload = http.getString();
+  Serial.println(httpCode);
+  Serial.println(payload);
+  http.end();
+}
+
+/* ======================================================= */
+
+void patchJson(String url, JsonObject& data){
+  Serial.print("Patching JSON data to: ");
+  Serial.print(url);
+  Serial.print(" -> ");
+
+  char JSONmessageBuffer[512];
+  data.printTo(JSONmessageBuffer, sizeof(JSONmessageBuffer));
+  
+  Serial.print(JSONmessageBuffer);
+    
+  HTTPClient http;
+  http.begin(url);
+  http.addHeader("Content-Type", "application/json");
+  int httpCode = http.PATCH(JSONmessageBuffer);
   String payload = http.getString();
   Serial.println(httpCode);
   Serial.println(payload);
@@ -136,106 +174,14 @@ JsonObject& jsonEntity() {
   return entity;
 }
 
-
 /* ======================================================= */
 
-/*JsonObject& fetchJson (String endpoint) {
-
-  // Allocate JsonBuffer
-  // Use arduinojson.org/assistant to compute the capacity.
-  const size_t capacity = JSON_OBJECT_SIZE(1) + JSON_OBJECT_SIZE(8) + 60;
-  DynamicJsonBuffer jsonBuffer(capacity);
-
-  // Use WiFiClient class to create TCP connections
-  WiFiClient client = fiwareConnection();
-  
-  Serial.print("Requesting URL: ");
-  Serial.print(fiwareHost);
-  Serial.println(endpoint);
-  
-  // This will send the request to the server
-  client.print(String("GET ") + endpoint + " HTTP/1.1\r\n" +
-               "Host: " + fiwareHost + "\r\n" + 
-               "Connection: close\r\n\r\n");
-  unsigned long timeout = millis();
-  while (client.available() == 0) {
-    if (millis() - timeout > 5000) {
-      Serial.println(">>> Client Timeout !");
-      client.stop();
-    return jsonBuffer.parseObject("{}");
-    }
-  }
-
-  // Check HTTP status
-  char status[32] = {0};
-  client.readBytesUntil('\r', status, sizeof(status));
-  if (strcmp(status, "HTTP/1.1 200 OK") != 0) {
-    Serial.print(F("Unexpected response: "));
-    Serial.println(status);
-    return jsonBuffer.parseObject("{}");
-  }
-
-  // Skip HTTP headers
-  char endOfHeaders[] = "\r\n\r\n";
-  if (!client.find(endOfHeaders)) {
-    Serial.println(F("Invalid response"));
-    return jsonBuffer.parseObject("{}");
-  }
-
-  // Parse JSON object
-  JsonObject& root = jsonBuffer.parseObject(client);
-  if (!root.success()) {
-    Serial.println(F("Parsing failed!"));
-    return jsonBuffer.parseObject("{}");
-  }
-  // Disconnect & return
-  client.stop();
-  return root;
-  
-}*/
-
-/* ======================================================= */
-
-/*WiFiClient fiwareConnection() {
-  
-  Serial.print("connecting to ");
-  Serial.println(fiwareHost);
-  
-   // Use WiFiClient class to create TCP connections
-  WiFiClient client;
-  const int httpPort = 80;
-  if (!client.connect(fiwareHost, httpPort)) {
-    Serial.println("connection failed");
-  }
-  return client;
-  
-}*/
-
-/* ======================================================= */
-
-/*void registerEntity() {
-  
-  WiFiClient client = fiwareConnection();
-  
-}*/
-
-/* ======================================================= */
-
-/*JsonObject& jsonEntity() {
-  
-  StaticJsonBuffer<512> jsonBuffer;
-  JsonObject& entity = jsonBuffer.createObject();
-  
-  entity["id"] = eId;
-  entity["type"] = eType;
-  
-  JsonObject& description = entity.createNestedObject("description");
-  description["value"] = eDescription;
-  description["type"] = "String";
-  
-  JsonObject& var1 = entity.createNestedObject("var1");
+JsonObject& SensorData() {
+  StaticJsonBuffer<128> jsonBuffer;
+  JsonObject& sData = jsonBuffer.createObject();
+  JsonObject& var1 = sData.createNestedObject("var1");
   var1["value"] = eVar1Value;
   var1["type"] = eVar1Type;
-  
-  return entity;
-}*/
+  return sData;
+}
+
